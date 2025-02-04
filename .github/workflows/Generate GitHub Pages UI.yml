@@ -29,10 +29,6 @@ jobs:
 
             - name: Add Monaco Editor
               run: |
-                  cd public
-                  wget https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.21.2/min/vs.zip
-                  unzip vs.zip
-                  rm vs.zip
 
             - name: Create index.html
               run: |
