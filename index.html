@@ -5,14 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GitHub 网盘</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.js"></script>
-  
-  <!-- 引入第三方库 -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.17.3/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.cjs.min.js"></script>
-  
   <style>
     body {
       padding: 20px;
@@ -49,15 +44,12 @@
       padding: 4px 8px;
       border-radius: 4px;
       cursor: pointer;
-      margin-left: auto;
+      margin-left: auto; /* 确保下载按钮右对齐 */
     }
     .file-info {
       display: flex;
       align-items: center;
       flex-grow: 1;
-    }
-    .progress-container {
-      margin-top: 20px;
     }
   </style>
 </head>
@@ -77,12 +69,6 @@
     <div class="card">
       <div class="card-body">
         <ul class="file-list" id="file-list">正在加载文件...</ul>
-        <div class="progress-container">
-          <p id="progress-status">加载中... (0/0)</p>
-          <div class="progress">
-            <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -96,24 +82,22 @@
         </div>
         <div class="modal-body">
           <div id="monaco-container" style="width:100%;height:80vh;border:1px solid #ddd;"></div>
-          <div id="file-preview-container" style="width:100%;height:80vh;"></div>
         </div>
       </div>
     </div>
   </div>
+
   <script>
-    const repo = "qmwneb946/pan"; 
-    const branch = "main"; 
-    let currentPath = "files"; 
-    let cache = {}; 
-    let editor = null; 
+    const repo = "qmwneb946/pan"; // 替换为你的仓库
+    const branch = "main"; // 仓库分支
+    let currentPath = "files"; // 初始目录
+    let cache = {}; // 缓存 API 数据
+    let editor = null; // Monaco 编辑器实例
 
-    const previewExtensions = ["txt", "cpp", "c", "h", "py", "js", "json", "html", "css", "md", "java", "go", "rs", "csv", "xlsx", "docx"];
-
-    // 初始化 Monaco Editor
-    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
+    const previewExtensions = ["txt", "cpp", "c", "h", "py", "js", "json", "html", "css", "md", "java", "go", "rs", "csv", "mp4"];
 
     async function fetchFiles(path) {
+      console.log(`Fetching files from path: ${path}`);
       updateBreadcrumb(path);
       if (cache[path]) {
         renderFiles(cache[path], path);
@@ -121,8 +105,12 @@
       }
       const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
       try {
-        const response = await fetch(url);
-        const files = await response.json();
+        let response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch files: ${response.statusText}`);
+        }
+        let files = await response.json();
+        console.log('Files fetched:', files);
         cache[path] = files;
         renderFiles(files, path);
       } catch (error) {
@@ -131,190 +119,195 @@
       }
     }
 
+    function renderFiles(files, path) {
+      let list = document.getElementById("file-list");
+      list.innerHTML = "";
+      files.forEach(file => {
+        let li = document.createElement("li");
+        let fileInfo = document.createElement("div");
+        fileInfo.className = "file-info";
+
+        let link = document.createElement("a");
+        link.style = "text-decoration: none; color: inherit; flex-grow: 1;";
+        if (file.type === "dir") {
+          link.href = "#";
+          link.onclick = (e) => {
+            e.preventDefault();
+            currentPath = file.path;
+            fetchFiles(file.path);
+          };
+          link.innerHTML = `<i class="fas fa-folder text-warning"></i> ${file.name}`;
+        } else {
+          let ext = file.name.split('.').pop().toLowerCase();
+          let size = formatFileSize(file.size);
+          let modifiedDate = file.last_modified ? new Date(file.last_modified).toLocaleDateString() : "未知";
+          if (previewExtensions.includes(ext)) {
+            link.href = "#";
+            link.onclick = (e) => {
+              e.preventDefault();
+              previewFile(file);
+            };
+            link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name} <span class="text-muted">(${size})</span> <span class="text-muted">最后修改: ${modifiedDate}</span>`;
+          } else {
+            link.href = `https://pan.qmwneb946.us.kg/${file.path}`;
+            link.target = "_blank";
+            link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name} <span class="text-muted">(${size})</span> <span class="text-muted">最后修改: ${modifiedDate}</span>`;
+          }
+        }
+
+        fileInfo.appendChild(link);
+        li.appendChild(fileInfo);
+
+        // 仅对文件添加下载按钮，对文件夹不添加
+        if (file.type !== "dir") {
+          let downloadButton = document.createElement("a");
+          downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`;
+          downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
+          downloadButton.innerHTML = '<i class="fas fa-download"></i>';
+          downloadButton.download = file.name;
+          li.appendChild(downloadButton);
+        }
+
+        list.appendChild(li);
+      });
+    }
+
     function updateBreadcrumb(path) {
       const breadcrumb = document.getElementById("breadcrumb");
-      breadcrumb.innerHTML = '<li class="breadcrumb-item"><a href="#" onclick="navigateToRoot(event)">根目录</a></li>';
+      breadcrumb.innerHTML = "";
       const parts = path.split("/");
-      
+      let accumulatedPath = "";
+      const rootItem = document.createElement("li");
+      rootItem.className = "breadcrumb-item";
+      if (parts[0] === "files") {
+        rootItem.innerHTML = `<a href="#" onclick="navigateToRoot(event)">根目录</a>`;
+      } else {
+        rootItem.textContent = "根目录";
+      }
+      breadcrumb.appendChild(rootItem);
+
       parts.forEach((part, index) => {
-        if (!part) return;
+        accumulatedPath += (index === 0 ? part : "/" + part);
         const li = document.createElement("li");
-        li.className = "breadcrumb-item" + (index === parts.length - 1 ? " active" : "");
-        if (index < parts.length - 1) {
-          li.innerHTML = `<a href="#" onclick="navigateBreadcrumb(event, '${parts.slice(0, index+1).join('/')}')">${part}</a>`;
-        } else {
+        li.className = "breadcrumb-item";
+        if (index === parts.length - 1) {
+          li.classList.add("active");
+          li.setAttribute("aria-current", "page");
           li.textContent = part;
+        } else {
+          li.innerHTML = `<a href="#" onclick="navigateBreadcrumb(event, '${accumulatedPath}')">${part}</a>`;
         }
         breadcrumb.appendChild(li);
       });
     }
 
-    function navigateToRoot(event) {
-      event.preventDefault();
-      currentPath = "files";
-      fetchFiles(currentPath);
-    }
-
-    function navigateBreadcrumb(event, path) {
-      event.preventDefault();
+    function navigateBreadcrumb(e, path) {
+      e.preventDefault();
       currentPath = path;
       fetchFiles(path);
     }
 
-    async function renderFiles(files, path) {
-      const list = document.getElementById("file-list");
-      list.innerHTML = "";
-      const progressBar = document.getElementById("progress-bar");
-      const progressStatus = document.getElementById("progress-status");
-      const totalFiles = files.length;
-      let processedFiles = 0;
-
-      for (const file of files) {
-        const li = createFileItem(file);
-        list.appendChild(li);
-        
-        processedFiles++;
-        progressBar.style.width = `${(processedFiles/totalFiles)*100}%`;
-        progressStatus.textContent = `加载中... (${processedFiles}/${totalFiles})`;
-        await new Promise(resolve => setTimeout(resolve, 5)); // 让UI更新
-      }
-    }
-
-    function createFileItem(file) {
-      const li = document.createElement("li");
-      const modifiedDate = new Date(file.updated_at).toLocaleDateString();
-      const size = formatFileSize(file.size);
-      const ext = file.name.split('.').pop().toLowerCase();
-
-      li.innerHTML = `
-        <div class="file-info">
-          <a href="#" class="${file.type === 'dir' ? 'folder' : 'file'}">
-            <i class="fas ${file.type === 'dir' ? 'fa-folder text-warning' : 'fa-file-alt text-primary'}"></i>
-            ${file.name}
-            <span class="text-muted">(${size})</span>
-            <span class="text-muted">最后修改: ${modifiedDate}</span>
-          </a>
-          ${file.type !== 'dir' ? `
-            <a href="https://raw.githubusercontent.com/${repo}/${branch}/${file.path}" 
-               class="btn btn-sm btn-outline-primary download-btn"
-               download="${file.name}">
-              <i class="fas fa-download"></i>
-            </a>` : ''}
-        </div>
-      `;
-
-      if (file.type === 'dir') {
-        li.querySelector('a').addEventListener('click', (e) => {
-          e.preventDefault();
-          currentPath = file.path;
-          fetchFiles(file.path);
-        });
-      } else if (previewExtensions.includes(ext)) {
-        li.querySelector('a').addEventListener('click', (e) => {
-          e.preventDefault();
-          previewFile(file);
-        });
-      }
-
-      return li;
+    function navigateToRoot(e) {
+      e.preventDefault();
+      currentPath = "files";
+      fetchFiles(currentPath);
     }
 
     async function previewFile(file) {
-      const ext = file.name.split('.').pop().toLowerCase();
-      const previewTypes = {
-        xlsx: previewExcelCsv,
-        csv: previewExcelCsv,
-        docx: previewDocx,
-        pptx: previewPptx
-      };
-
+      console.log(`Previewing file: ${file.name}`);
+      document.getElementById("previewFilename").textContent = file.name;
+      const container = document.getElementById("monaco-container");
+      container.innerHTML = "加载中...";
       try {
-        const response = await fetch(`https://raw.githubusercontent.com/${repo}/${branch}/${file.path}`);
-        const content = ext in previewTypes ? 
-          await response.arrayBuffer() : 
-          await response.text();
-
-        document.getElementById("previewFilename").textContent = file.name;
-        if (previewTypes[ext]) {
-          previewTypes[ext](content, ext);
-        } else {
-          previewText(content, ext);
+        let response = await fetch(file.download_url.replace("github.com", "pan.qmwneb946.us.kg"));
+        if (!response.ok) {
+          throw new Error(`Failed to load file: ${response.statusText}`);
         }
-
-        new bootstrap.Modal(document.getElementById('previewModal')).show();
+        let content = await response.text();
+        let language = getLanguageFromFileName(file.name);
+        let modalEl = document.getElementById('previewModal');
+        let modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        setTimeout(() => {
+          loadMonacoEditor(content, language);
+        }, 300);
       } catch (error) {
-        console.error('Error loading file:', error);
-        document.getElementById("file-preview-container").innerHTML = "无法加载文件内容";
+        console.error('Error loading file content:', error);
+        container.innerText = "无法加载文件内容";
       }
     }
 
-    function previewExcelCsv(content, ext) {
-      const wb = XLSX.read(content, { type: 'array' });
-      const html = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
-      document.getElementById("file-preview-container").innerHTML = html;
-    }
-
-    async function previewDocx(content) {
-      try {
-        const { value } = await mammoth.convertToHtml({ arrayBuffer: content });
-        document.getElementById("file-preview-container").innerHTML = value;
-      } catch (error) {
-        document.getElementById("file-preview-container").innerHTML = "无法解析DOCX文件";
+    function getLanguageFromFileName(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      switch(ext) {
+        case "cpp":
+        case "c":
+        case "h":
+          return "cpp";
+        case "py":
+          return "python";
+        case "js":
+          return "javascript";
+        case "json":
+          return "json";
+        case "html":
+          return "html";
+        case "css":
+          return "css";
+        case "md":
+          return "markdown";
+        case "java":
+          return "java";
+        case "go":
+          return "go";
+        case "rs":
+          return "rust";
+        case "csv":
+          return "csv";
+        case "mp4":
+          return "plaintext"; // MP4 can be previewed as plaintext for simplicity
+        case "txt":
+        default:
+          return "plaintext";
       }
     }
 
-    function previewPptx() {
-      document.getElementById("file-preview-container").innerHTML = "暂不支持PPTX文件预览";
-    }
-
-    function previewText(content, ext) {
-      const container = document.getElementById("file-preview-container");
-      const monacoContainer = document.getElementById("monaco-container");
-      
-      container.style.display = 'none';
-      monacoContainer.style.display = 'block';
-
-      if (editor) editor.dispose();
-      
-      require(['vs/editor/editor.main'], () => {
-        editor = monaco.editor.create(monacoContainer, {
+    function loadMonacoEditor(content, language) {
+      console.log("Loading Monaco editor...");
+      if (editor) {
+        editor.dispose();
+      }
+      const container = document.getElementById("monaco-container");
+      container.innerHTML = "";
+      require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
+      require(["vs/editor/editor.main"], function () {
+        editor = monaco.editor.create(container, {
           value: content,
-          language: getLanguage(ext),
+          language: language,
+          theme: "vs-light",
+          automaticLayout: true,
           readOnly: true,
-          theme: 'vs-light',
-          automaticLayout: true
+          minimap: { enabled: false }
         });
+        console.log("Monaco editor loaded successfully!");
       });
     }
 
-    function getLanguage(ext) {
-      const languages = {
-        'js': 'javascript', 'py': 'python', 'html': 'html', 'css': 'css',
-        'json': 'json', 'md': 'markdown', 'java': 'java', 'cpp': 'cpp',
-        'c': 'c', 'h': 'cpp', 'go': 'go', 'rs': 'rust'
-      };
-      return languages[ext] || 'plaintext';
-    }
-
-    function formatFileSize(bytes) {
-      const units = ['B', 'KB', 'MB', 'GB'];
-      let size = bytes;
-      for (const unit of units) {
-        if (size < 1024) return `${size.toFixed(1)} ${unit}`;
-        size /= 1024;
+    function formatFileSize(size) {
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let unitIndex = 0;
+      let formattedSize = size;
+      while (formattedSize >= 1024 && unitIndex < units.length - 1) {
+        formattedSize /= 1024;
+        unitIndex++;
       }
-      return `${size.toFixed(1)} GB`;
+      return `${formattedSize.toFixed(1)} ${units[unitIndex]}`;
     }
-
-    // 初始化
-    document.getElementById('previewModal').addEventListener('hidden.bs.modal', () => {
-      if (editor) {
-        editor.dispose();
-        editor = null;
-      }
-    });
 
     fetchFiles(currentPath);
   </script>
+  <div class="text-center my-4">
+    <p>如果下载/预览失败，请确保上面的图标为绿色。</p>
+  </div>
 </body>
 </html>
