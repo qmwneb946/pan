@@ -44,6 +44,7 @@
       padding: 4px 8px;
       border-radius: 4px;
       cursor: pointer;
+      margin-left: auto; /* 确保下载按钮右对齐 */
     }
     .file-info {
       display: flex;
@@ -55,6 +56,11 @@
 <body>
   <div class="container">
     <h2 class="text-center my-4">📂 我的 GitHub 网盘</h2>
+    <div class="text-center my-4">
+      <a href="https://github.com/qmwneb946/pan/actions/workflows/pages/pages-build-deployment">
+        <img src="https://github.com/qmwneb946/pan/actions/workflows/pages/pages-build-deployment/badge.svg" alt="pages-build-deployment">
+      </a>
+    </div>
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb" id="breadcrumb">
         <li class="breadcrumb-item active">根目录</li>
@@ -88,7 +94,7 @@
     let cache = {}; // 缓存 API 数据
     let editor = null; // Monaco 编辑器实例
 
-    const previewExtensions = ["txt", "cpp", "c", "h", "py", "js", "json", "html", "css", "md", "java", "go", "rs"];
+    const previewExtensions = ["txt", "cpp", "c", "h", "py", "js", "json", "html", "css", "md", "java", "go", "rs", "csv", "mp4"];
 
     async function fetchFiles(path) {
       console.log(`Fetching files from path: ${path}`);
@@ -133,31 +139,35 @@
           link.innerHTML = `<i class="fas fa-folder text-warning"></i> ${file.name}`;
         } else {
           let ext = file.name.split('.').pop().toLowerCase();
+          let size = formatFileSize(file.size);
+          let modifiedDate = file.last_modified ? new Date(file.last_modified).toLocaleDateString() : "未知";
           if (previewExtensions.includes(ext)) {
             link.href = "#";
             link.onclick = (e) => {
               e.preventDefault();
               previewFile(file);
             };
-            let sizeKB = (file.size / 1024).toFixed(1);
-            link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name} <span class="text-muted">(${sizeKB} KB)</span>`;
+            link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name} <span class="text-muted">(${size})</span> <span class="text-muted">最后修改: ${modifiedDate}</span>`;
           } else {
             link.href = `https://pan.qmwneb946.us.kg/${file.path}`;
             link.target = "_blank";
-            let sizeKB = (file.size / 1024).toFixed(1);
-            link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name} <span class="text-muted">(${sizeKB} KB)</span>`;
+            link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name} <span class="text-muted">(${size})</span> <span class="text-muted">最后修改: ${modifiedDate}</span>`;
           }
         }
 
-        let downloadButton = document.createElement("a");
-        downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`;
-        downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
-        downloadButton.innerHTML = '<i class="fas fa-download"></i>';
-        downloadButton.download = file.name;
-
         fileInfo.appendChild(link);
         li.appendChild(fileInfo);
-        li.appendChild(downloadButton);
+
+        // 仅对文件添加下载按钮，对文件夹不添加
+        if (file.type !== "dir") {
+          let downloadButton = document.createElement("a");
+          downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`;
+          downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
+          downloadButton.innerHTML = '<i class="fas fa-download"></i>';
+          downloadButton.download = file.name;
+          li.appendChild(downloadButton);
+        }
+
         list.appendChild(li);
       });
     }
@@ -209,7 +219,7 @@
       const container = document.getElementById("monaco-container");
       container.innerHTML = "加载中...";
       try {
-        let response = await fetch(file.download_url);
+        let response = await fetch(file.download_url.replace("github.com", "pan.qmwneb946.us.kg"));
         if (!response.ok) {
           throw new Error(`Failed to load file: ${response.statusText}`);
         }
@@ -252,6 +262,10 @@
           return "go";
         case "rs":
           return "rust";
+        case "csv":
+          return "csv";
+        case "mp4":
+          return "plaintext"; // MP4 can be previewed as plaintext for simplicity
         case "txt":
         default:
           return "plaintext";
@@ -279,7 +293,21 @@
       });
     }
 
+    function formatFileSize(size) {
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let unitIndex = 0;
+      let formattedSize = size;
+      while (formattedSize >= 1024 && unitIndex < units.length - 1) {
+        formattedSize /= 1024;
+        unitIndex++;
+      }
+      return `${formattedSize.toFixed(1)} ${units[unitIndex]}`;
+    }
+
     fetchFiles(currentPath);
   </script>
+  <div class="text-center my-4">
+    <p>如果下载/预览失败，请确保上面的图标为绿色。</p>
+  </div>
 </body>
 </html>
