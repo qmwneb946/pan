@@ -15,11 +15,16 @@
       margin: auto;
       background: #f8f9fa;
     }
+    .file-list {
+      list-style: none;
+      padding: 0;
+    }
     .file-list li {
       padding: 10px;
       border-bottom: 1px solid #ddd;
       display: flex;
       align-items: center;
+      justify-content: space-between;
     }
     .file-list li:last-child {
       border-bottom: none;
@@ -35,6 +40,16 @@
     .breadcrumb-item.active {
       color: #6c757d;
     }
+    .download-btn {
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .file-info {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+    }
   </style>
 </head>
 <body>
@@ -47,7 +62,7 @@
     </nav>
     <div class="card">
       <div class="card-body">
-        <ul class="list-unstyled mb-0" id="file-list">正在加载文件...</ul>
+        <ul class="file-list" id="file-list">正在加载文件...</ul>
       </div>
     </div>
   </div>
@@ -75,9 +90,8 @@
 
     const previewExtensions = ["txt", "cpp", "c", "h", "py", "js", "json", "html", "css", "md", "java", "go", "rs"];
 
-    // 获取文件列表
     async function fetchFiles(path) {
-      console.log(`Fetching files from path: ${path}`); // 调试信息
+      console.log(`Fetching files from path: ${path}`);
       updateBreadcrumb(path);
       if (cache[path]) {
         renderFiles(cache[path], path);
@@ -90,7 +104,7 @@
           throw new Error(`Failed to fetch files: ${response.statusText}`);
         }
         let files = await response.json();
-        console.log('Files fetched:', files); // 调试信息
+        console.log('Files fetched:', files);
         cache[path] = files;
         renderFiles(files, path);
       } catch (error) {
@@ -99,12 +113,14 @@
       }
     }
 
-    // 渲染文件列表
     function renderFiles(files, path) {
       let list = document.getElementById("file-list");
       list.innerHTML = "";
       files.forEach(file => {
         let li = document.createElement("li");
+        let fileInfo = document.createElement("div");
+        fileInfo.className = "file-info";
+
         let link = document.createElement("a");
         link.style = "text-decoration: none; color: inherit; flex-grow: 1;";
         if (file.type === "dir") {
@@ -126,18 +142,26 @@
             let sizeKB = (file.size / 1024).toFixed(1);
             link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name} <span class="text-muted">(${sizeKB} KB)</span>`;
           } else {
-            link.href = file.download_url;
+            link.href = `https://pan.qmwneb946.us.kg/${file.path}`;
             link.target = "_blank";
             let sizeKB = (file.size / 1024).toFixed(1);
             link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name} <span class="text-muted">(${sizeKB} KB)</span>`;
           }
         }
-        li.appendChild(link);
+
+        let downloadButton = document.createElement("a");
+        downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`;
+        downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
+        downloadButton.innerHTML = '<i class="fas fa-download"></i>';
+        downloadButton.download = file.name;
+
+        fileInfo.appendChild(link);
+        li.appendChild(fileInfo);
+        li.appendChild(downloadButton);
         list.appendChild(li);
       });
     }
 
-    // 更新面包屑导航显示当前路径
     function updateBreadcrumb(path) {
       const breadcrumb = document.getElementById("breadcrumb");
       breadcrumb.innerHTML = "";
@@ -179,9 +203,8 @@
       fetchFiles(currentPath);
     }
 
-    // 预览文件内容
     async function previewFile(file) {
-      console.log(`Previewing file: ${file.name}`); // 调试信息
+      console.log(`Previewing file: ${file.name}`);
       document.getElementById("previewFilename").textContent = file.name;
       const container = document.getElementById("monaco-container");
       container.innerHTML = "加载中...";
@@ -236,13 +259,13 @@
     }
 
     function loadMonacoEditor(content, language) {
-      console.log("Loading Monaco editor..."); // 调试信息
+      console.log("Loading Monaco editor...");
       if (editor) {
         editor.dispose();
       }
       const container = document.getElementById("monaco-container");
       container.innerHTML = "";
-      require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' }});
+      require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
       require(["vs/editor/editor.main"], function () {
         editor = monaco.editor.create(container, {
           value: content,
@@ -252,7 +275,7 @@
           readOnly: true,
           minimap: { enabled: false }
         });
-        console.log("Monaco editor loaded successfully!"); // 调试信息
+        console.log("Monaco editor loaded successfully!");
       });
     }
 
