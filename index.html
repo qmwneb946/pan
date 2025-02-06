@@ -15,23 +15,8 @@
       margin: auto;
       background: #f8f9fa;
     }
-    .file-list {
-      list-style: none;
-      padding: 0;
-    }
-    .file-list li {
-      padding: 10px;
-      border-bottom: 1px solid #ddd;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .file-list li:last-child {
-      border-bottom: none;
-    }
-    .file-list i {
-      margin-right: 10px;
-      font-size: 1.2rem;
+    .table td, .table th {
+      vertical-align: middle;
     }
     .breadcrumb-item a {
       text-decoration: none;
@@ -45,28 +30,43 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    .file-info {
-      display: flex;
-      align-items: center;
-      flex-grow: 1;
-    }
   </style>
 </head>
 <body>
   <div class="container">
+    
+
     <h2 class="text-center my-4">📂 我的 GitHub 网盘</h2>
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb" id="breadcrumb">
+    <!-- 面包屑和上传按钮行 -->
+    <nav class="d-flex justify-content-between align-items-center" aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0" id="breadcrumb">
         <li class="breadcrumb-item active">根目录</li>
       </ol>
+      <a id="uploadBtn" class="btn btn-sm btn-primary" target="_blank" href="#">上传文件</a>
     </nav>
     <div class="card">
       <div class="card-body">
-        <ul class="file-list" id="file-list">正在加载文件...</ul>
+        <!-- 表格显示文件列表 -->
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>文件名</th>
+              <th>大小</th>
+              <th>最后修改时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="file-list">
+            <tr>
+              <td colspan="4">正在加载文件...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
 
+  <!-- 预览模态框 -->
   <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
@@ -75,6 +75,7 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
         </div>
         <div class="modal-body">
+          <!-- 根据文件类型动态插入内容 -->
           <div id="monaco-container" style="width:100%;height:80vh;border:1px solid #ddd;"></div>
         </div>
       </div>
@@ -82,22 +83,77 @@
   </div>
 
   <script>
-    const repo = "qmwneb946/pan"; // 替换为你的仓库
-    const branch = "main"; // 仓库分支
-    let currentPath = "files"; // 初始目录
-    let cache = {}; // 缓存 API 数据
-    let editor = null; // Monaco 编辑器实例
+    const repo = "qmwneb946/pan"; // 仓库名
+    const branch = "main";       // 仓库分支
+    let currentPath = "files";   // 初始目录
+    let cache = {};              // 缓存 API 数据
+    let editor = null;           // Monaco 编辑器实例
 
-    const previewExtensions = ["txt", "cpp", "c", "h", "py", "js", "json", "html", "css", "md", "java", "go", "rs"];
+    // 更新 URL，将参数写入地址栏（不刷新页面）
+    function updateURL(paramStr) {
+      window.history.replaceState(null, "", paramStr);
+    }
+
+    // 自动调整文件大小单位
+    function formatSize(size) {
+      if (size < 1024) {
+        return size + " B";
+      } else if (size < 1024 * 1024) {
+        return (size / 1024).toFixed(1) + " KB";
+      } else if (size < 1024 * 1024 * 1024) {
+        return (size / (1024 * 1024)).toFixed(1) + " MB";
+      } else {
+        return (size / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+      }
+    }
+
+    // 判断是否为二进制文件（不可预览文本）
+    function isBinaryFile(ext) {
+      const binaryExtensions = [
+        "zip", "rar", "7z", "exe",
+        "pdf",
+        "doc", "docx", "xls", "xlsx", "ppt", "pptx"
+      ];
+      return binaryExtensions.includes(ext);
+    }
+
+    // 判断是否为媒体文件（音频、视频、图片）
+    function isMediaFile(ext) {
+      const mediaExtensions = [
+        "mp3", "mp4", "webm", // 音频/视频
+        "png", "jpg", "jpeg", "gif", "bmp", "svg" // 图片
+      ];
+      return mediaExtensions.includes(ext);
+    }
+
+    // 获取指定文件的最后修改时间（通过 commits API）
+    async function getCommitTime(filePath) {
+      const url = `https://api.github.com/repos/${repo}/commits?path=${filePath}&page=1&per_page=1`; 
+      try {
+        let response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch commit: ${response.statusText}`);
+        }
+        let commits = await response.json();
+        if (commits.length > 0) {
+          return new Date(commits[0].commit.author.date).toLocaleString();
+        }
+      } catch (error) {
+        console.error("获取 commit 时间出错：", error);
+      }
+      return "";
+    }
 
     async function fetchFiles(path) {
       console.log(`Fetching files from path: ${path}`);
       updateBreadcrumb(path);
+      // 更新 URL 显示 ?path= 参数（如果不是预览状态下）
+      updateURL(`?path=${encodeURIComponent(path)}`);
       if (cache[path]) {
         renderFiles(cache[path], path);
         return;
       }
-      const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
+      const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`; 
       try {
         let response = await fetch(url);
         if (!response.ok) {
@@ -109,20 +165,38 @@
         renderFiles(files, path);
       } catch (error) {
         console.error('Error fetching files:', error);
-        document.getElementById("file-list").innerText = "无法加载文件列表";
+        document.getElementById("file-list").innerHTML = `<tr><td colspan="4">无法加载文件列表</td></tr>`;
       }
     }
 
-    function renderFiles(files, path) {
-      let list = document.getElementById("file-list");
-      list.innerHTML = "";
-      files.forEach(file => {
-        let li = document.createElement("li");
-        let fileInfo = document.createElement("div");
-        fileInfo.className = "file-info";
+    async function renderFiles(files, path) {
+      const tbody = document.getElementById("file-list");
+      tbody.innerHTML = "";
 
-        let link = document.createElement("a");
-        link.style = "text-decoration: none; color: inherit; flex-grow: 1;";
+      // 排序：目录排前面，文件排后面；文件内先按扩展名排序，再按名称排序
+      files.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === "dir" ? -1 : 1;
+        } else if (a.type === "dir") {
+          return a.name.localeCompare(b.name);
+        } else {
+          let extA = a.name.includes('.') ? a.name.split('.').pop().toLowerCase() : "";
+          let extB = b.name.includes('.') ? b.name.split('.').pop().toLowerCase() : "";
+          if (extA !== extB) {
+            return extA.localeCompare(extB);
+          }
+          return a.name.localeCompare(b.name);
+        }
+      });
+
+      // 为每个文件或目录创建一行
+      for (const file of files) {
+        const tr = document.createElement("tr");
+
+        // 文件名列（图标和链接）
+        const tdName = document.createElement("td");
+        const link = document.createElement("a");
+        link.style = "text-decoration: none; color: inherit;";
         if (file.type === "dir") {
           link.href = "#";
           link.onclick = (e) => {
@@ -131,35 +205,58 @@
             fetchFiles(file.path);
           };
           link.innerHTML = `<i class="fas fa-folder text-warning"></i> ${file.name}`;
+          tdName.appendChild(link);
         } else {
           let ext = file.name.split('.').pop().toLowerCase();
-          if (previewExtensions.includes(ext)) {
+          if (!isBinaryFile(ext)) {
             link.href = "#";
             link.onclick = (e) => {
               e.preventDefault();
               previewFile(file);
             };
-            let sizeKB = (file.size / 1024).toFixed(1);
-            link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name} <span class="text-muted">(${sizeKB} KB)</span>`;
+            if (isMediaFile(ext)) {
+              link.innerHTML = `<i class="fas fa-file-video text-success"></i> ${file.name}`;
+            } else {
+              link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name}`;
+            }
           } else {
-            link.href = `https://pan.qmwneb946.us.kg/${file.path}`;
+            link.href = `https://pan.qmwneb946.us.kg/${file.path}`; 
             link.target = "_blank";
-            let sizeKB = (file.size / 1024).toFixed(1);
-            link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name} <span class="text-muted">(${sizeKB} KB)</span>`;
+            link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name}`;
           }
+          tdName.appendChild(link);
         }
 
-        let downloadButton = document.createElement("a");
-        downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`;
-        downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
-        downloadButton.innerHTML = '<i class="fas fa-download"></i>';
-        downloadButton.download = file.name;
+        // 大小列
+        const tdSize = document.createElement("td");
+        tdSize.textContent = file.type === "dir" ? "" : formatSize(file.size);
 
-        fileInfo.appendChild(link);
-        li.appendChild(fileInfo);
-        li.appendChild(downloadButton);
-        list.appendChild(li);
-      });
+        // 最后修改时间列（仅对文件显示）
+        const tdTime = document.createElement("td");
+        if (file.type !== "dir") {
+          tdTime.textContent = "加载中…";
+          getCommitTime(file.path).then(time => {
+            tdTime.textContent = time;
+          });
+        }
+
+        // 操作列（仅对文件显示下载按钮）
+        const tdAction = document.createElement("td");
+        if (file.type !== "dir") {
+          const downloadButton = document.createElement("a");
+          downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`; 
+          downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
+          downloadButton.innerHTML = '<i class="fas fa-download"></i>';
+          downloadButton.download = file.name;
+          tdAction.appendChild(downloadButton);
+        }
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdSize);
+        tr.appendChild(tdTime);
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      }
     }
 
     function updateBreadcrumb(path) {
@@ -189,6 +286,15 @@
         }
         breadcrumb.appendChild(li);
       });
+
+      // 更新上传按钮链接，当前目录即为上传目标目录
+      const uploadBtn = document.getElementById("uploadBtn");
+      uploadBtn.href = `https://github.com/qmwneb946/pan/upload/main/${path}`;
+      // 点击上传按钮时使用 window.open 打开新窗口
+      uploadBtn.onclick = (e) => {
+        e.preventDefault();
+        window.open(uploadBtn.href, "_blank", "width=800,height=600");
+      };
     }
 
     function navigateBreadcrumb(e, path) {
@@ -207,24 +313,51 @@
       console.log(`Previewing file: ${file.name}`);
       document.getElementById("previewFilename").textContent = file.name;
       const container = document.getElementById("monaco-container");
-      container.innerHTML = "加载中...";
-      try {
-        // 修改处：将预览文件的链接替换为 https://pan.qmwneb946.us.kg/files/...
-        let response = await fetch(`https://pan.qmwneb946.us.kg/${file.path}`);
-        if (!response.ok) {
-          throw new Error(`Failed to load file: ${response.statusText}`);
+      container.innerHTML = "";
+      let ext = file.name.split('.').pop().toLowerCase();
+      const fileUrl = `https://pan.qmwneb946.us.kg/${file.path}`; 
+      const modalEl = document.getElementById('previewModal');
+      const modal = new bootstrap.Modal(modalEl);
+      
+      // 更新 URL 显示 file 参数
+      updateURL(`?file=${encodeURIComponent(file.path)}`);
+      
+      // 添加一次性监听器：关闭预览时恢复显示目录的 path 参数
+      if (!modalEl.dataset.listenerAdded) {
+        modalEl.addEventListener("hidden.bs.modal", () => {
+          updateURL(`?path=${encodeURIComponent(currentPath)}`);
+        });
+        modalEl.dataset.listenerAdded = "true";
+      }
+      
+      if (isMediaFile(ext)) {
+        let html = "";
+        if (["png", "jpg", "jpeg", "gif", "bmp", "svg"].includes(ext)) {
+          html = `<img src="${fileUrl}" alt="${file.name}" style="max-width:100%;max-height:80vh;display:block;margin:auto;">`;
+        } else if (ext === "mp3") {
+          html = `<audio controls style="width:100%;"><source src="${fileUrl}" type="audio/mpeg">您的浏览器不支持 audio 标签。</audio>`;
+        } else if (["mp4", "webm"].includes(ext)) {
+          html = `<video controls style="width:100%;max-height:80vh;display:block;margin:auto;"><source src="${fileUrl}" type="video/mp4">您的浏览器不支持 video 标签。</video>`;
         }
-        let content = await response.text();
-        let language = getLanguageFromFileName(file.name);
-        let modalEl = document.getElementById('previewModal');
-        let modal = new bootstrap.Modal(modalEl);
+        container.innerHTML = html;
         modal.show();
-        setTimeout(() => {
-          loadMonacoEditor(content, language);
-        }, 300);
-      } catch (error) {
-        console.error('Error loading file content:', error);
-        container.innerText = "无法加载文件内容";
+      } else {
+        container.innerHTML = "加载中...";
+        try {
+          let response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to load file: ${response.statusText}`);
+          }
+          let content = await response.text();
+          let language = getLanguageFromFileName(file.name);
+          modal.show();
+          setTimeout(() => {
+            loadMonacoEditor(content, language);
+          }, 300);
+        } catch (error) {
+          console.error('Error loading file content:', error);
+          container.innerText = "无法加载文件内容";
+        }
       }
     }
 
@@ -280,7 +413,33 @@
       });
     }
 
-    fetchFiles(currentPath);
+    // 页面加载时，根据 URL 参数自动加载目录或预览文件
+    window.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if(urlParams.has("file")) {
+        // 如果 URL 中存在 file 参数，则以该文件所在目录为 currentPath，并自动预览该文件
+        const fileParam = urlParams.get("file");
+        const lastSlash = fileParam.lastIndexOf("/");
+        currentPath = lastSlash !== -1 ? fileParam.substring(0, lastSlash) : "files";
+        await fetchFiles(currentPath);
+        try {
+          let response = await fetch(`https://api.github.com/repos/${repo}/contents/${fileParam}?ref=${branch}`); 
+          if (!response.ok) throw new Error(response.statusText);
+          let file = await response.json();
+          if(file && file.type === "file"){
+            previewFile(file);
+          }
+        } catch (err) {
+          console.error("预览文件时出错：", err);
+        }
+      } else {
+        // 没有 file 参数，则根据 path 参数或默认 currentPath 加载目录
+        if(urlParams.has("path")){
+          currentPath = urlParams.get("path");
+        }
+        fetchFiles(currentPath);
+      }
+    });
   </script>
 </body>
 </html>
