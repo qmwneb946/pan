@@ -42,7 +42,7 @@
       <ol class="breadcrumb mb-0" id="breadcrumb">
         <li class="breadcrumb-item active">根目录</li>
       </ol>
-<!--       <a id="uploadBtn" class="btn btn-sm btn-primary" target="_blank" href="#">上传文件</a> -->
+      <a id="uploadBtn" class="btn btn-sm btn-primary" target="_blank" href="#">上传文件</a>
     </nav>
     <div class="card">
       <div class="card-body">
@@ -173,7 +173,6 @@
       const tbody = document.getElementById("file-list");
       tbody.innerHTML = "";
 
-      // 排序：目录排前面，文件排后面；文件内先按扩展名排序，再按名称排序
       files.sort((a, b) => {
         if (a.type !== b.type) {
           return a.type === "dir" ? -1 : 1;
@@ -189,11 +188,9 @@
         }
       });
 
-      // 为每个文件或目录创建一行
       for (const file of files) {
         const tr = document.createElement("tr");
 
-        // 文件名列（图标和链接）
         const tdName = document.createElement("td");
         const link = document.createElement("a");
         link.style = "text-decoration: none; color: inherit;";
@@ -227,11 +224,9 @@
           tdName.appendChild(link);
         }
 
-        // 大小列
         const tdSize = document.createElement("td");
         tdSize.textContent = file.type === "dir" ? "" : formatSize(file.size);
 
-        // 最后修改时间列（仅对文件显示）
         const tdTime = document.createElement("td");
         if (file.type !== "dir") {
           tdTime.textContent = "加载中…";
@@ -240,7 +235,6 @@
           });
         }
 
-        // 操作列（仅对文件显示下载按钮）
         const tdAction = document.createElement("td");
         if (file.type !== "dir") {
           const downloadButton = document.createElement("a");
@@ -249,6 +243,30 @@
           downloadButton.innerHTML = '<i class="fas fa-download"></i>';
           downloadButton.download = file.name;
           tdAction.appendChild(downloadButton);
+
+          // 添加删除链接
+          const deleteLink = document.createElement("a");
+          deleteLink.href = `https://github.com/${repo}/tree/delete/main/${file.path}`;  // 删除文件的链接
+          deleteLink.className = "btn btn-sm btn-outline-danger";
+          deleteLink.innerHTML = '<i class="fas fa-trash-alt"></i>';
+          deleteLink.target = "_blank";
+          tdAction.appendChild(deleteLink);
+
+          // 添加编辑链接
+          const editLink = document.createElement("a");
+          editLink.href = `https://github.com/${repo}/edit/main/${file.path}`;  // 编辑文件的链接
+          editLink.className = "btn btn-sm btn-outline-warning";
+          editLink.innerHTML = '<i class="fas fa-edit"></i>';
+          editLink.target = "_blank";
+          tdAction.appendChild(editLink);
+        } else {
+          // 如果是文件夹，删除链接指向相应的删除路径
+          const deleteLink = document.createElement("a");
+          deleteLink.href = `https://github.com/${repo}/tree/delete/main/${file.path}`;  // 删除文件夹的链接
+          deleteLink.className = "btn btn-sm btn-outline-danger";
+          deleteLink.innerHTML = '<i class="fas fa-trash-alt"></i>';
+          deleteLink.target = "_blank";
+          tdAction.appendChild(deleteLink);
         }
 
         tr.appendChild(tdName);
@@ -258,6 +276,8 @@
         tbody.appendChild(tr);
       }
     }
+
+
 
     function updateBreadcrumb(path) {
       const breadcrumb = document.getElementById("breadcrumb");
@@ -287,14 +307,14 @@
         breadcrumb.appendChild(li);
       });
 
-      // // 更新上传按钮链接，当前目录即为上传目标目录
-      // const uploadBtn = document.getElementById("uploadBtn");
-      // uploadBtn.href = `https://github.com/qmwneb946/pan/upload/main/${path}`;
-      // // 点击上传按钮时使用 window.open 打开新窗口
-      // uploadBtn.onclick = (e) => {
-      //   e.preventDefault();
-      //   window.open(uploadBtn.href, "_blank", "width=800,height=600");
-      // };
+      // 更新上传按钮链接，当前目录即为上传目标目录
+      const uploadBtn = document.getElementById("uploadBtn");
+      uploadBtn.href = `https://github.com/qmwneb946/pan/upload/main/${path}`;
+      // 点击上传按钮时使用 window.open 打开新窗口
+      uploadBtn.onclick = (e) => {
+        e.preventDefault();
+        window.open(uploadBtn.href, "_blank", "width=800,height=600");
+      };
     }
 
     function navigateBreadcrumb(e, path) {
