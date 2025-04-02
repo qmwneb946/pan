@@ -217,7 +217,7 @@
               link.innerHTML = `<i class="fas fa-file-alt text-primary"></i> ${file.name}`;
             }
           } else {
-            link.href = `https://pan.qmwneb946.us.kg/${file.path}`; 
+            link.href = `https://pan.qmwneb946.dpdns.org/${file.path}`; 
             link.target = "_blank";
             link.innerHTML = `<i class="fas fa-file text-secondary"></i> ${file.name}`;
           }
@@ -245,7 +245,7 @@
           tdAction.appendChild(deleteLink);
 
           const downloadButton = document.createElement("a");
-          downloadButton.href = `https://pan.qmwneb946.us.kg/${file.path}`; 
+          downloadButton.href = `https://pan.qmwneb946.dpdns.org/${file.path}`; 
           downloadButton.className = "btn btn-sm btn-outline-primary download-btn";
           downloadButton.innerHTML = '<i class="fas fa-download"></i>';
           downloadButton.download = file.name;
@@ -333,7 +333,7 @@
       const container = document.getElementById("monaco-container");
       container.innerHTML = "";
       let ext = file.name.split('.').pop().toLowerCase();
-      const fileUrl = `https://pan.qmwneb946.us.kg/${file.path}`; 
+      const fileUrl = `https://pan.qmwneb946.dpdns.org/${file.path}`; 
       const modalEl = document.getElementById('previewModal');
       const modal = new bootstrap.Modal(modalEl);
       
